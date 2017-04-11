@@ -1,8 +1,5 @@
 class ArticlesController < ApplicationController
   before_action :article_categories_info, only: [:index, :show]
-  skip_before_action :verify_authenticity_token, only: :download_image
-
-  # before_action :authenticate_user!, only: [:new, :create, :update]
 
   def index
     @articles =
@@ -108,7 +105,6 @@ class ArticlesController < ApplicationController
     @articles_size = Article.count
     @articles_uncategorised_size = Article.uncategorised.count
     @categories = ArticleCategory.includes(:articles).all
-    # @group_article_categories = ArticleCategoriesArticle.group(:article_category_id).count
   end
 
   def article_params

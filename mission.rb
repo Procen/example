@@ -27,7 +27,6 @@ class Mission < ApplicationRecord
   scope :upcoming, -> { where("start_date::date > ?", Date.today).order(start_date: :ASC) }
   scope :finished, -> { where("end_date::date < ?", Date.today).order(start_date: :ASC) }
 
-  # scope :to_review, -> {joins(:user_missions).merge(UserMission.pending)}
   scope :to_review, -> {joins(:user_missions).includes(:missions_ranks).where("user_missions.state = ?", :pending).uniq}
 
   scope :favorites, -> {  where(is_favorite: true)  }
@@ -75,11 +74,7 @@ class Mission < ApplicationRecord
   end
 
   def self.to_csv(missions)
-    headers = %w(
-      Title Description StartDate EndDate CategoryId AdminId IsFavorite HashTags OtherRequirements
-      MissionLogoPath MissionImagePath ReviewCount ViewersCount PostsCount ApprovedCount
-      RejectedCount Cost CreatedAt MissionsRanksAttributes
-    )
+    headers = %w(Title Description StartDate EndDate)
 
     dir_path = "#{Rails.public_path}/exports"
     FileUtils.mkdir_p(dir_path) unless File.directory?(dir_path)
@@ -89,13 +84,7 @@ class Mission < ApplicationRecord
     CSV.open(file_path, 'wb') do |csv|
         csv << headers
         missions.each do |m|
-            values = [
-                m.title, m.description, m.start_date, m.end_date, m.category_id, m.admin_id,
-                m.is_favorite, m.hash_tags, m.other_requirements, m.mission_logo_path,
-                m.mission_image_path, m.review_count, m.viewers_count, m.posts_count,
-                m.approved_count, m.rejected_count, m.cost, m.created_at,
-                m.missions_ranks_attributes
-            ]
+            values = [m.title, m.description, m.start_date, m.end_date]
             csv << values
         end
     end
@@ -147,36 +136,6 @@ class Mission < ApplicationRecord
         fee: mission_rank.fee
       }
     end
-  end
-
-  def self.print_mission_report(mission_id)
-    mission = Mission.where(id: mission_id).includes(:missions_ranks, :admin).first
-    advertiser = mission.admin
-    ranks = Rank.all
-    mission_ranks = mission.missions_ranks
-    rank_approved = {}
-    Rank.all.each { |rank| rank_approved[rank.name] = 0 }
-    user_missions = UserMission.where(mission_id: mission_id, state: :approved).includes(user: :rank)
-    user_missions.each { |item| rank_approved[item.user.rank.name] += 1 }
-    users = User.where(id: user_missions.map(&:user_id))
-    ranks_ids = users.map(&:rank_id)
-
-    cost = ranks.sum do |rank|
-      ranks_ids.count(rank.id) * mission_ranks.find { |item| item.rank_id == rank.id }.try(:fee).to_i
-    end
-
-    estimated_viewers = users.sum(&:instagram_followers)
-    {
-      mission_id: mission_id,
-      advertiser_name: advertiser.name,
-      advertiser_email: advertiser.email,
-      title: mission.title,
-      approved_count: user_missions.size,
-      rank_approved: rank_approved,
-      estimated_viewers: estimated_viewers,
-      fees: cost,
-      cost: cost
-    }
   end
 
 private
